@@ -10,6 +10,8 @@ import { AppointmentsHeader } from '@/components/appointments-header'
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState('today')
+  const [searchQuery, setSearchQuery] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -21,9 +23,7 @@ export default function AppointmentsPage() {
         event: '*',
         schema: 'public',
         table: 'appointments'
-      }, () => {
-        fetchAppointments()
-      })
+      }, () => fetchAppointments())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -49,19 +49,25 @@ export default function AppointmentsPage() {
   }
 
   const today = new Date().toISOString().split('T')[0]
-  const todayAppointments = appointments.filter(a => a.appointment_date === today)
-  const confirmed = todayAppointments.filter(a => a.status === 'confirmed').length
-  const pending = todayAppointments.filter(a => a.status === 'pending').length
-  const cancelled = todayAppointments.filter(a => a.status === 'cancelled').length
 
+  const filteredAppointments = appointments.filter(a => {
+    const matchesDate = selectedDate === 'today' ? a.appointment_date === today : true
+    const matchesSearch = searchQuery === '' ||
+      a.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.patient_phone?.includes(searchQuery) ||
+      a.doctors?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesDate && matchesSearch
+  })
+
+  const todayAppointments = appointments.filter(a => a.appointment_date === today)
   const stats = {
     totalToday: todayAppointments.length,
-    confirmed,
-    pending,
-    cancelled
+    confirmed: todayAppointments.filter(a => a.status === 'confirmed').length,
+    pending: todayAppointments.filter(a => a.status === 'pending').length,
+    cancelled: todayAppointments.filter(a => a.status === 'cancelled').length,
   }
 
-  const tableData = appointments.map(a => ({
+  const tableData = filteredAppointments.map(a => ({
     id: a.id,
     patientName: a.patient_name,
     phoneNumber: a.patient_phone,
@@ -73,7 +79,12 @@ export default function AppointmentsPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <AppointmentsHeader />
+        <AppointmentsHeader
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
         {loading ? (
           <div className="text-slate-400 text-center py-8">Loading appointments...</div>
         ) : (
