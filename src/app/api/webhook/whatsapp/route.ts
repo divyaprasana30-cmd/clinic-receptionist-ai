@@ -6,6 +6,10 @@ import { ConversationSession, MessageIntent } from "@/types/conversation";
 import { getAvailableSlots, createAppointment } from "@/lib/scheduling/slot-engine";
 import { sendBookingConfirmation } from "@/lib/resend/client";
 
+export async function GET() {
+  return new Response("WhatsApp webhook is active", { status: 200 });
+}
+
 async function parseTwilioBody(req: NextRequest): Promise<Record<string, string>> {
   const text = await req.text();
   const params: Record<string, string> = {};
