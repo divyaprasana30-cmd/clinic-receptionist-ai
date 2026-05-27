@@ -1,45 +1,102 @@
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react'
+'use client'
 
-interface AppointmentsHeaderProps {
-  selectedDate: string
-  onDateChange: (date: string) => void
-  searchQuery: string
-  onSearchChange: (query: string) => void
-}
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { DashboardLayout } from '@/components/dashboard-layout'
+import { StatsCards } from '@/components/stats-cards'
+import { AppointmentsTable } from '@/components/appointments-table'
+import { AppointmentsHeader } from '@/components/appointments-header'
 
-export function AppointmentsHeader({
-  selectedDate,
-  onDateChange,
-  searchQuery,
-  onSearchChange,
-}: AppointmentsHeaderProps) {
+export default function AppointmentsPage() {
+  const [appointments, setAppointments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState('today')
+  const [searchQuery, setSearchQuery] = useState('')
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchAppointments()
+
+    const channel = supabase
+      .channel('appointments')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'appointments'
+      }, () => fetchAppointments())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  async function fetchAppointments() {
+    const { data } = await supabase
+      .from('appointments')
+      .select(`*, doctors (name, specialization)`)
+      .order('appointment_date', { ascending: true })
+      .order('appointment_time', { ascending: true })
+
+    if (data) setAppointments(data)
+    setLoading(false)
+  }
+
+  async function cancelAppointment(id: string) {
+    await supabase
+      .from('appointments')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+    fetchAppointments()
+  }
+
+  const today = new Date().toISOString().split('T')[0]
+
+  const filteredAppointments = appointments.filter(a => {
+    const matchesDate = selectedDate === 'today' ? a.appointment_date === today : true
+    const matchesSearch = searchQuery === '' ||
+      a.patient_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.patient_phone?.includes(searchQuery) ||
+      a.doctors?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesDate && matchesSearch
+  })
+
+  const todayAppointments = appointments.filter(a => a.appointment_date === today)
+  const stats = {
+    totalToday: todayAppointments.length,
+    confirmed: todayAppointments.filter(a => a.status === 'confirmed').length,
+    pending: todayAppointments.filter(a => a.status === 'pending').length,
+    cancelled: todayAppointments.filter(a => a.status === 'cancelled').length,
+  }
+
+  const tableData = filteredAppointments.map(a => ({
+    id: a.id,
+    patientName: a.patient_name,
+    phoneNumber: a.patient_phone,
+    doctorName: a.doctors?.name || 'Unknown',
+    dateTime: `${a.appointment_date} ${a.appointment_time?.slice(0, 5)}`,
+    status: a.status as 'confirmed' | 'pending' | 'cancelled',
+  }))
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h2 className="text-2xl font-bold text-white">Appointments</h2>
-        <Button
-          onClick={() => onDateChange('today')}
-          className={`${
-            selectedDate === 'today'
-              ? 'bg-blue-600 hover:bg-blue-700'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-          }`}
-        >
-          Today
-        </Button>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input
-          placeholder="Search by patient name, phone, or doctor..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-400 focus:border-blue-600"
+    <DashboardLayout>
+      <div className="p-6 space-y-6">
+        <AppointmentsHeader
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
+        {loading ? (
+          <div className="text-slate-400 text-center py-8">Loading appointments...</div>
+        ) : (
+          <>
+            <StatsCards stats={stats} />
+            <AppointmentsTable
+              appointments={tableData}
+              onCancel={cancelAppointment}
+            />
+          </>
+        )}
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
