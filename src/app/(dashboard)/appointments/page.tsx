@@ -48,6 +48,13 @@ export default function AppointmentsPage() {
     fetchAppointments()
   }
 
+  function exportSchedule() {
+    const exportDate = selectedDate === 'today'
+      ? new Date().toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0]
+    window.open(`/api/export?date=${exportDate}`, '_blank')
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
   const filteredAppointments = appointments.filter(a => {
@@ -79,12 +86,22 @@ export default function AppointmentsPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <AppointmentsHeader
-          selectedDate={selectedDate}
-          onDateChange={setSelectedDate}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <AppointmentsHeader
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
+          </div>
+          <button
+            onClick={exportSchedule}
+            className="mt-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 whitespace-nowrap"
+          >
+            📄 Export Schedule
+          </button>
+        </div>
         {loading ? (
           <div className="text-slate-400 text-center py-8">Loading appointments...</div>
         ) : (

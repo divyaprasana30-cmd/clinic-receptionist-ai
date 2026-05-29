@@ -1,0 +1,129 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/server";
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+    const clinicId = searchParams.get("clinic_id");
+
+    const supabase = await createAdminSupabaseClient();
+
+    const query = supabase
+      .from("appointments")
+      .select(`*, doctors (name, specialization)`)
+      .eq("appointment_date", date)
+      .order("appointment_time", { ascending: true });
+
+    if (clinicId) query.eq("clinic_id", clinicId);
+
+    const { data: appointments } = await query;
+    const { data: clinic } = await supabase
+      .from("clinics")
+      .select("*")
+      .limit(1)
+      .single();
+
+    // Build HTML for PDF
+    const rows = appointments?.map((a, i) => `
+      <tr style="background:${i % 2 === 0 ? '#f8fafc' : 'white'}">
+        <td style="padding:10px;border:1px solid #e2e8f0">${a.appointment_time?.slice(0, 5)}</td>
+        <td style="padding:10px;border:1px solid #e2e8f0">${a.patient_name}</td>
+        <td style="padding:10px;border:1px solid #e2e8f0">${a.patient_phone}</td>
+        <td style="padding:10px;border:1px solid #e2e8f0">${(a.doctors as any)?.name || 'N/A'}</td>
+        <td style="padding:10px;border:1px solid #e2e8f0">
+          <span style="padding:3px 10px;border-radius:20px;font-size:12px;background:${
+            a.status === 'confirmed' ? '#dcfce7' : 
+            a.status === 'cancelled' ? '#fee2e2' : '#fef9c3'
+          };color:${
+            a.status === 'confirmed' ? '#166534' : 
+            a.status === 'cancelled' ? '#991b1b' : '#854d0e'
+          }">${a.status}</span>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center;padding:20px">No appointments for this date</td></tr>';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Daily Schedule — ${date}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: #1e293b; }
+          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 3px solid #3b82f6; padding-bottom: 15px; }
+          .clinic-name { font-size: 24px; font-weight: bold; color: #1e293b; }
+          .clinic-ai { font-size: 14px; color: #3b82f6; font-weight: 500; }
+          .date-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #475569; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #3b82f6; color: white; padding: 12px 10px; text-align: left; font-size: 13px; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+          .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+          .stat { background: #f1f5f9; padding: 10px 20px; border-radius: 8px; text-align: center; }
+          .stat-num { font-size: 24px; font-weight: bold; color: #3b82f6; }
+          .stat-label { font-size: 12px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="clinic-name">${clinic?.name || 'Clinic'}</div>
+            <div class="clinic-ai">Powered by ClinicAI</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:20px;font-weight:bold">Daily Schedule</div>
+            <div style="color:#64748b">${new Date(date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num">${appointments?.length || 0}</div>
+            <div class="stat-label">Total</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" style="color:#16a34a">${appointments?.filter(a => a.status === 'confirmed').length || 0}</div>
+            <div class="stat-label">Confirmed</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" style="color:#ca8a04">${appointments?.filter(a => a.status === 'pending').length || 0}</div>
+            <div class="stat-label">Pending</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" style="color:#dc2626">${appointments?.filter(a => a.status === 'cancelled').length || 0}</div>
+            <div class="stat-label">Cancelled</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Patient Name</th>
+              <th>Phone</th>
+              <th>Doctor</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div class="footer">
+          Generated by ClinicAI • ${new Date().toLocaleString('en-IN')}
+        </div>
+      </body>
+      </html>
+    `;
+
+    return new NextResponse(html, {
+      headers: {
+        "Content-Type": "text/html",
+        "Content-Disposition": `attachment; filename="schedule-${date}.html"`,
+      },
+    });
+
+  } catch (error) {
+    console.error("Export error:", error);
+    return NextResponse.json({ error: "Failed to export" }, { status: 500 });
+  }
+}
