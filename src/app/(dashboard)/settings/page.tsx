@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DashboardLayout } from '@/components/dashboard-layout'
+import { useClinic } from '@/context/ClinicContext'
 
 export default function SettingsPage() {
+  const { setSettings } = useClinic()
   const [clinic, setClinic] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -57,6 +59,16 @@ export default function SettingsPage() {
         timezone: form.timezone,
       })
       .eq('id', clinic.id)
+
+    setSettings({
+      name: form.name,
+      email: form.email,
+      address: form.address,
+      whatsapp_number: form.whatsapp_number,
+      timezone: form.timezone,
+      auto_respond: true,
+      email_alerts: true,
+    })
 
     setSaving(false)
     setSaved(true)

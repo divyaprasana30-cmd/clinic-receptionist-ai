@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useClinic } from '@/context/ClinicContext'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -24,6 +25,9 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { settings } = useClinic()
+
+  const clinicName = settings.name || 'Clinic'
 
   const menuItems = [
     { href: '/appointments', icon: Calendar, label: 'Appointments' },
@@ -74,10 +78,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
               <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=ClinicAI" />
-              <AvatarFallback>CA</AvatarFallback>
+              <AvatarFallback>{clinicName.slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Sunrise Clinic</p>
+              <p className="text-sm font-medium text-white truncate">{clinicName}</p>
               <p className="text-xs text-slate-400">Admin Account</p>
             </div>
           </div>
@@ -101,7 +105,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Menu className="w-5 h-5" />
               )}
             </Button>
-            <h1 className="text-lg font-semibold text-white">Sunrise Clinic</h1>
+            <h1 className="text-lg font-semibold text-white">{clinicName}</h1>
           </div>
           <Button
             variant="ghost"
