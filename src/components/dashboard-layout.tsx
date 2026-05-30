@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -16,14 +16,62 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useClinic } from '@/context/ClinicContext'
+import { createClient } from '@/lib/supabase/client'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
+interface Appointment {
+  id: string
+  patient_name: string
+  patient_phone: string
+  appointment_date: string
+  appointment_time: string
+  status: string
+  created_at: string
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { settings } = useClinic()
+  const [notifications, setNotifications] = useState<Appointment[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const supabase = createClient()
+
+  const clinicName = settings.name || 'Clinic'
+
+  useEffect(() => {
+    fetchRecentAppointments()
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowNotifications(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  async function fetchRecentAppointments() {
+    const { data } = await supabase
+      .from('appointments')
+      .select('id, patient_name, patient_phone, appointment_date, appointment_time, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (data) {
+      setNotifications(data)
+      setUnreadCount(data.filter(a => a.status === 'confirmed').length)
+    }
+  }
 
   const menuItems = [
     { href: '/appointments', icon: Calendar, label: 'Appointments' },
@@ -74,10 +122,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
               <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=ClinicAI" />
-              <AvatarFallback>CA</AvatarFallback>
+              <AvatarFallback>{clinicName.slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Sunrise Clinic</p>
+              <p className="text-sm font-medium text-white truncate">{clinicName}</p>
               <p className="text-xs text-slate-400">Admin Account</p>
             </div>
           </div>
@@ -95,22 +143,67 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="md:hidden text-slate-300 hover:text-white"
             >
-              {sidebarOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+            <h1 className="text-lg font-semibold text-white">{clinicName}</h1>
+          </div>
+
+          {/* Bell with Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-slate-300 hover:text-white relative"
+              onClick={() => setShowNotifications(!showNotifications)}
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                  {unreadCount}
+                </span>
               )}
             </Button>
-            <h1 className="text-lg font-semibold text-white">Sunrise Clinic</h1>
+
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50">
+                <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+                  <h3 className="text-white font-semibold text-sm">Recent Appointments</h3>
+                  <Link
+                    href="/appointments"
+                    className="text-blue-400 text-xs hover:underline"
+                    onClick={() => setShowNotifications(false)}
+                  >
+                    View all
+                  </Link>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <p className="text-slate-400 text-sm text-center py-6">No appointments</p>
+                  ) : (
+                    notifications.map((appt) => (
+                      <div key={appt.id} className="px-4 py-3 border-b border-slate-700 hover:bg-slate-700 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <p className="text-white text-sm font-medium">{appt.patient_name}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            appt.status === 'confirmed' ? 'bg-green-500/20 text-green-400' :
+                            appt.status === 'cancelled' ? 'bg-red-500/20 text-red-400' :
+                            'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                            {appt.status}
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                          {appt.appointment_date} at {appt.appointment_time}
+                        </p>
+                        <p className="text-slate-500 text-xs">{appt.patient_phone}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-slate-300 hover:text-white relative"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </Button>
         </header>
 
         {/* Content Area */}
