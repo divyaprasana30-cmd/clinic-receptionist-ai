@@ -18,6 +18,8 @@ export default function SettingsPage() {
     address: '',
     whatsapp_number: '',
     timezone: 'Asia/Kolkata',
+    auto_respond: true,
+    email_alerts: true,
   })
   const supabase = createClient()
 
@@ -26,7 +28,7 @@ export default function SettingsPage() {
   }, [])
 
   async function fetchClinic() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('clinics')
       .select('*')
       .limit(1)
@@ -41,14 +43,18 @@ export default function SettingsPage() {
         address: data.address || '',
         whatsapp_number: data.whatsapp_number || '',
         timezone: data.timezone || 'Asia/Kolkata',
+        auto_respond: data.auto_respond ?? true,
+        email_alerts: data.email_alerts ?? true,
       })
     }
     setLoading(false)
   }
 
   async function saveSettings() {
+    if (!clinic) return
     setSaving(true)
-    await supabase
+
+    const { error } = await supabase
       .from('clinics')
       .update({
         name: form.name,
@@ -57,8 +63,16 @@ export default function SettingsPage() {
         address: form.address,
         whatsapp_number: form.whatsapp_number,
         timezone: form.timezone,
+        auto_respond: form.auto_respond,
+        email_alerts: form.email_alerts,
       })
       .eq('id', clinic.id)
+
+    if (error) {
+      console.error('Save error:', error)
+      setSaving(false)
+      return
+    }
 
     setSettings({
       name: form.name,
@@ -66,8 +80,8 @@ export default function SettingsPage() {
       address: form.address,
       whatsapp_number: form.whatsapp_number,
       timezone: form.timezone,
-      auto_respond: true,
-      email_alerts: true,
+      auto_respond: form.auto_respond,
+      email_alerts: form.email_alerts,
     })
 
     setSaving(false)
@@ -171,23 +185,31 @@ export default function SettingsPage() {
             <p className="text-slate-400 text-sm">Configure your WhatsApp AI behavior</p>
           </div>
 
+          {/* Auto-respond Toggle */}
           <div className="flex items-center justify-between py-3 border-b border-slate-700">
             <div>
               <p className="text-white text-sm font-medium">Auto-respond to Messages</p>
               <p className="text-slate-400 text-xs">AI automatically responds to incoming messages</p>
             </div>
-            <div className="w-10 h-6 bg-blue-600 rounded-full relative cursor-pointer">
-              <div className="w-4 h-4 bg-white rounded-full absolute right-1 top-1"></div>
+            <div
+              onClick={() => setForm({ ...form, auto_respond: !form.auto_respond })}
+              className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${form.auto_respond ? 'bg-blue-600' : 'bg-slate-600'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${form.auto_respond ? 'right-1' : 'left-1'}`}></div>
             </div>
           </div>
 
+          {/* Email Alerts Toggle */}
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-white text-sm font-medium">Email Alerts</p>
               <p className="text-slate-400 text-xs">Receive email alerts for new bookings</p>
             </div>
-            <div className="w-10 h-6 bg-blue-600 rounded-full relative cursor-pointer">
-              <div className="w-4 h-4 bg-white rounded-full absolute right-1 top-1"></div>
+            <div
+              onClick={() => setForm({ ...form, email_alerts: !form.email_alerts })}
+              className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${form.email_alerts ? 'bg-blue-600' : 'bg-slate-600'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${form.email_alerts ? 'right-1' : 'left-1'}`}></div>
             </div>
           </div>
         </div>
